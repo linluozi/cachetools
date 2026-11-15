@@ -487,6 +487,29 @@ class CacheTestMixin(SimplifiedTestCaseProtocol):
 
         self.assertEqual(cache, pickle.loads(pickle.dumps(cache)))
 
+    def test_pickle_protocols(self):
+        import pickle
+        import sys
+
+        for protocol in range(pickle.HIGHEST_PROTOCOL + 1):
+            # PyPy's unpickler cannot load protocol 0 "inf" floats, as used
+            # for expiration times by the timed test caches
+            if protocol == 0 and sys.implementation.name == "pypy":
+                continue
+            source = self.Cache(maxsize=3)
+            source.update({1: 1, 2: 2, 3: 3})
+            source[1] = 4  # update existing item
+            del source[2]
+
+            cache = pickle.loads(pickle.dumps(source, protocol))
+            self.assertEqual(source, cache)
+            self.assertEqual(source.currsize, cache.currsize)
+
+            cache.update({4: 4, 5: 5})
+            self.assertEqual(3, len(cache))
+            self.assertEqual(3, cache.currsize)
+            self.assertEqual(2, len(source))
+
     def test_pickle_maxsize(self):
         import pickle
         import sys

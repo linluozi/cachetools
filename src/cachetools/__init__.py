@@ -692,6 +692,10 @@ class TLRUCache(_TimedCache):
             self.expires = expires
             self.removed = False
 
+        # pickle protocols 0 and 1 require __getstate__ with __slots__
+        def __getstate__(self):
+            return object.__getstate__(self)
+
         def __lt__(self, other):
             return self.expires < other.expires
 
