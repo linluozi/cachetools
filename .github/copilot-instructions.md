@@ -33,14 +33,17 @@ review process.
   extending it for any new figure. Record cache state with `list(cache)`, since
   `items()` and `values()` count as a use of every item. Modify caches while iterating
   over them, too. Find test gaps by reading the tests against the code and coverage;
-  run mutation tests only when asked.
-- Pickle (protocols 2 to 5, also with `pickle._Pickler`, #474; the obsolete protocols
-  0 and 1 are unsupported, do not report them), copy and deep-copy
-  caches in a used state, on the oldest supported Python too, and compare the clones'
-  later evictions. Repeat with a timer object (also one defining `__deepcopy__`), a
-  bound-method `getsizeof`, subclass attributes and `__slots__`. When a fix touches
-  pickled state, load the previous release's pickles with it and the reverse, and
-  keep the format where that is cheap.
+  run mutation tests only when asked. Check that a new test fails without its fix
+  under a timeout, since a loop bug hangs the suite.
+- Name an unmerged fix branch (`fix/*`) next to the finding it resolves, with its
+  Actions status; the finding stays until the branch is merged.
+- Pickle (protocols 2 to 5, also with `pickle._Pickler`, #474; the obsolete protocols 0
+  and 1 are unsupported, do not report them), copy and deep-copy caches in a used state,
+  on the oldest supported Python too, and compare the clones' later evictions. Repeat
+  with a timer object (also one defining `__deepcopy__`), a bound-method `getsizeof`,
+  subclass attributes and `__slots__`. When a fix touches pickled state, load the
+  previous release's pickles with it and the reverse, and keep the format where that is
+  cheap.
 - Probe decorators with awkward callables: one without `__qualname__` (a
   `functools.partial`), a parameter named `self`, other decorators stacked on top.
 - Keep probe scripts, logs and old trees in `.cache/tmp/` inside the workspace, never

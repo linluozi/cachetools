@@ -1,12 +1,12 @@
 # Code Review — cachetools 8.0.1
 
 **Date:** 2026-11-17, `__version__` 8.0.1 (changelog "UNRELEASED", not tagged)
-**Reviewed:** `develop` at `a73e9f3` "Prepare v8.0.1.", plus this review commit.
+**Reviewed:** `develop` at `404dc47` "Prepare v8.0.1.", plus this review commit.
 
-**CI status:** `tox -p auto` passes on CPython 3.14.6 (464 tests, pyright 0 errors,
-0 warnings), `py` on 3.11.15, 3.12.13, 3.13.17 and PyPy 3.11.15. Actions is green for
-the reviewed code (3.11–3.15, 3.13t–3.15t, PyPy 3.11), not run for this review commit.
-**Coverage:** 100% on 3.11, 3.12 and PyPy; on 3.13 and 3.14 only `_descriptor.py:36`.
+**CI status:** `tox -p auto` passes on CPython 3.14.4 (464 tests, pyright 0 errors, 0
+warnings), `py` on 3.11.15, 3.12.13 and PyPy 7.3.21; 3.13 not run here. Actions is green
+for the same source and tests, pushed as `a73e9f3` (3.11–3.15, 3.13t–3.15t, PyPy 3.11).
+**Coverage:** 100% on 3.11, 3.12 and PyPy; 3.14 lacks `_descriptor.py:36`.
 
 ## Code — Potential Issues
 
@@ -15,8 +15,8 @@ the reviewed code (3.11–3.15, 3.13t–3.15t, PyPy 3.11), not run for this revi
 | 1 | Low | `_decorator.py` `_ConditionMixin` / `_ConditionInfoMixin` via `@cachedmethod` | Pending sets are per wrapper, so two instances sharing one cache and condition do not coordinate pending keys. |
 | 2 | Low | condition variants of `@cached` / `@cachedmethod` | Same-thread recursion on the same key hangs on its own pending marker, where the `lock` variants raise `RecursionError`. Suggested fix (unmeasured): record the owning thread per pending key and let it call the function uncached. |
 | 3 | Low | `Cache` (inherited `items()` / `values()`) | Iterating either view (or `dict(cache)`) reads through `__getitem__` and counts as a use of every item: `LRUCache`, `TTLCache` and `TLRUCache` fall back to insertion order, every `LFUCache` count increments. Undocumented; `keys()`, `in` and `repr()` are unaffected. |
-| 4 | Low | `_TimedCache._Timer.__getattr__` | Known issue: `copy.deepcopy()` of a `TTLCache` or `TLRUCache` whose timer object defines `__deepcopy__` yields a copy holding the bare timer, whose first insert raises `TypeError`. Fix tried, not applied: a `_Timer.__deepcopy__` that wraps a deep copy of the timer. |
-| 5 | Low | `TTLCache.__iter__` / `TLRUCache.__iter__` | Modifying a timed cache while iterating over it is not detected, where the other classes raise `RuntimeError` like `dict`. Updating an existing key in the loop, which is safe for the others, ends a `TTLCache` iteration after the first key and makes a `TLRUCache` yield keys repeatedly; inserting new keys keeps a `TTLCache` loop going, and after `clear()` it still yields the removed keys. Suggested fix (untested): iterate over a snapshot of the links, or raise `RuntimeError` on a change. |
+| 4 | Low | `_TimedCache._Timer.__getattr__` | Known issue: `copy.deepcopy()` of a `TTLCache` or `TLRUCache` whose timer object defines `__deepcopy__` yields a copy holding the bare timer, whose first insert raises `TypeError`. Fixed on the unmerged branch `fix/timer-deepcopy` (Actions green) by a `_Timer.__deepcopy__` that wraps a deep copy of the timer. |
+| 5 | Low | `TTLCache.__iter__` / `TLRUCache.__iter__` | Modifying a timed cache while iterating over it is not detected, where the other classes raise `RuntimeError` like `dict`. Updating an existing key in the loop, which is safe for the others, ends a `TTLCache` iteration after the first key and makes a `TLRUCache` yield keys repeatedly; inserting new keys keeps a `TTLCache` loop going, and after `clear()` it still yields the removed keys. Suggested fix (tried on 3.14.4, not applied): iterate over a snapshot of the keys and skip those no longer present. |
 | 6 | Info | `Cache.__copy__`; `LFUCache.__setstate__` / `TTLCache.__setstate__` | Unsupported by decision (*Maintainer Decisions*): once a subclass sets a `__slots__` attribute, a shallow copy lacks it (`AttributeError` on use), and deep-copying or pickling such an `LFUCache` or `TTLCache` subclass raises `ValueError`. Empty or unset slots are unaffected; the subclass provides its own `__copy__` and `__setstate__`. `__slots__` gains nothing there: every `Cache` instance has a `__dict__` anyway, so a slot saves no memory and does not restrict attributes. |
 | 7 | Info | `_cached.py` `_WrapperBase.__reduce__` | Wrappers pickle by `__qualname__`: pickling raises `pickle.PicklingError` once that name is rebound or deleted, and `AttributeError` for a callable without `__qualname__` (e.g. a `functools.partial`). |
 | 8 | Info | `TTLCache.__setstate__` / `RRCache` | A deep-copied or unpickled `TTLCache` can iterate in a different order (ties in expiry time), so evictions can differ once `items()` or `values()` was iterated (Code #3). A deep-copied or unpickled `RRCache` with the default `choice` replays a clone of the `random` module's generator, and its pickle carries about 4 kB of generator state. An `LFUCache` pickled here does not load in v8.0.0 (`_Link` has no `next`); v8.0.0 pickles load here. |
@@ -95,4 +95,5 @@ of 1000 items, in µs: `dict` 2.4, `Cache` 2.8, `FIFOCache` 36, `LRUCache` 36, `
 
 | # | Priority | Finding |
 |---|----------|---------|
-| 1 | Low | The v8.0.1 section has no entry for `cachedmethod()` now raising `TypeError` at decoration when `cache` is not callable (it failed at the first call before), nor for the reworded error for decorators applied on top of `@cachedmethod`. The "(broken since v8.0.0)" and "(broken since v6.1.0)" tags check out against 7.3.2, 8.0.0, 6.0.0 and 6.1.0. |
+| 1 | Low | The v8.0.1 section has no entry for `cachedmethod()` now raising `TypeError` at decoration when `cache` is not callable (it failed at the first call before), nor for the reworded error for decorators applied on top of `@cachedmethod`. |
+| 2 | Info | The section is still headed "UNRELEASED" although the "Prepare v8.0.1." commit already sets `__version__`; it needs the release date before tagging. If `fix/timer-deepcopy` is merged first, it needs an entry too (the copy fails in every release tried back to v4.0.0). |
